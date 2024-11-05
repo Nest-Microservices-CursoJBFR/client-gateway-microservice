@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, Inject, ParseUUIDPipe, Query } from '@nestjs/common';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
-import { ORDER_SERVICE } from 'src/config';
+import { NATS_SERVICE, ORDER_SERVICE } from 'src/config';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { firstValueFrom } from 'rxjs';
 import { OrderPaginationDto, StatusDto } from './dto';
@@ -10,22 +10,31 @@ import { PaginationDto } from 'src/common';
 @Controller('orders')
 export class OrdersController {
   constructor(
-    @Inject(ORDER_SERVICE) private readonly ordersClient: ClientProxy,
+    @Inject(NATS_SERVICE) private readonly client: ClientProxy,
 
   ) {}
 
   @Post()
   create(@Body() createOrderDto: CreateOrderDto) {
-    return this.ordersClient.send('createOrder', createOrderDto);
+    return this.client.send('createOrder', createOrderDto);
     
     //return this.ordersService.create(createOrderDto);
   }
 
   @Get()
-  findAll(@Query() orderPaginationDto: OrderPaginationDto) {
+  async findAll(@Query() orderPaginationDto: OrderPaginationDto) {
     
+    try {
+      const orders = await firstValueFrom(
+        this.client.send('findAllOrders', orderPaginationDto)
+      )
+      
+      return orders;
+    } catch (error) {
+      throw new RpcException(error);
+    }
     //return orderPaginationDto;
-    return this.ordersClient.send('findAllOrders', orderPaginationDto);
+    //return 
     //return this.ordersService.findAll();
   }
 
@@ -35,7 +44,7 @@ export class OrdersController {
 
     try {
       const order = await firstValueFrom(
-        this.ordersClient.send('findOneOrder', { id })
+        this.client.send('findOneOrder', { id })
       );
       return order;
     } catch (error) {
@@ -50,7 +59,7 @@ export class OrdersController {
     ) {
 
     try {
-      return this.ordersClient.send('findAllOrders', {
+      return this.client.send('findAllOrders', {
         ...paginationDto,
         status: statusDto.status,
       });
@@ -71,7 +80,7 @@ export class OrdersController {
   ){
 
     try {
-      return this.ordersClient.send('changeOrderStatus', { id, status:statusDto.status})
+      return this.client.send('changeOrderStatus', { id, status:statusDto.status})
     } catch (error) {
       throw new RpcException(error);
     }
